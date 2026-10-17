@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CTRL+P — PRESS. POSE. PRINT.</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- QR Code Generator -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            --bg-main: #FAFAFA;
+            --fg-main: #09090B;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--bg-main);
+            color: var(--fg-main);
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .font-mono-custom {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Dotted grid paper background effect */
+        .bg-grid-pattern {
+            background-image: radial-gradient(#18181b 1px, transparent 1px);
+            background-size: 20px 20px;
+            background-position: -19px -19px;
+            opacity: 0.08;
+        }
+
+        /* Custom Scrollbar for Minimalist UI */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #F4F4F5;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #18181B;
+            border-radius: 3px;
+        }
+
+        /* Thermal Strip Shadow & Preview Effect */
+        .thermal-strip-preview {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e4e4e7;
+        }
+
+        .thermal-paper-edge {
+            background: linear-gradient(135deg, transparent 75%, #000 75%) 0 0,
+                        linear-gradient(-135deg, transparent 75%, #000 75%) 0 0;
+            background-size: 12px 12px;
+        }
+
+        /* Printing Flash Animation */
+        @keyframes flashAnim {
+            0% { opacity: 0.2; }
+            50% { opacity: 1; }
+            100% { opacity: 0.2; }
+        }
+        .flash-active {
+            animation: flashAnim 0.3s ease-in-out;
+        }
+
+        /* Flash Screen effect on capture */
+        #flashOverlay {
+            transition: opacity 0.15s ease-out;
+            pointer-events: none;
+        }
+
+        /* Print Media Style */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printArea, #printArea * {
+                visibility: visible;
+            }
+            #printArea {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            @page {
+                size: 57mm auto;
+                margin: 0;
+            }
+        }
+
+        /* Touch interaction handles for stickers */
+        .sticker-handle {
+            width: 24px;
+            height: 24px;
+            background: #000;
+            border: 2px solid #fff;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden relative bg-zinc-50 text-zinc-950">
+
+    <!-- Background Grid Pattern -->
+    <div class="fixed inset-0 bg-grid-pattern pointer-events-none z-0"></div>
+
+    <!-- Flash Overlay for Photo Capture -->
+    <div id="flashOverlay" class="fixed inset-0 bg-white opacity-0 z-50"></div>
+
+    <!-- Header / Branding Bar -->
+    <header class="relative z-10 w-full px-4 sm:px-8 py-4 border-b-2 border-zinc-900 bg-white/90 backdrop-blur-md flex items-center justify-between">
+        <div class="flex items-center gap-3 cursor-pointer" onclick="app.showWelcome()">
+            <div class="bg-zinc-950 text-white font-mono-custom font-bold px-3 py-1.5 rounded-lg text-lg tracking-wider flex items-center gap-2 shadow-sm">
+                <i data-lucide="printer" class="w-5 h-5"></i>
+                CTRL+P
+            </div>
+            <div class="hidden sm:block text-xs font-mono-custom font-semibold tracking-widest text-zinc-500 border-l-2 border-zinc-300 pl-3">
+                PRESS. POSE. PRINT.
+            </div>
+        </div>
+
+        <!-- Header Controls -->
+        <div class="flex items-center gap-2">
+            <span id="sessionBadge" class="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono-custom bg-zinc-100 border border-zinc-300 text-zinc-700">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span>
+                ID: <span id="currentSessionIdDisplay">---</span>
+            </span>
+            <button onclick="app.toggleAdminModal(true)" class="p-2 sm:px-3 sm:py-1.5 rounded-lg border-2 border-zinc-900 hover:bg-zinc-100 font-mono-custom text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95">
+                <i data-lucide="sliders" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">ADMIN</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main View Dynamic Container -->
+    <main class="relative z-10 flex-1 flex flex-col items-center justify-center p-3 sm:p-6 max-w-6xl mx-auto w-full">
+
+        <!-- VIEW 1: WELCOME SCREEN -->
+        <section id="viewWelcome" class="w-full max-w-2xl text-center flex flex-col items-center py-6 sm:py-12 px-4 bg-white border-2 border-zinc-900 rounded-2xl shadow-[8px_8px_0px_0px_rgba(24,24,27,1)] transition-all">
+            <div class="mb-6 p-4 bg-zinc-100 rounded-full border-2 border-zinc-900 inline-flex">
+                <i data-lucide="camera" class="w-12 h-12 text-zinc-900"></i>
+            </div>
+            <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight mb-2 font-mono-custom">CTRL+P</h1>
+            <p class="text-xl sm:text-2xl font-bold tracking-widest text-zinc-600 mb-8">PRESS. POSE. PRINT.</p>
+
+            <!-- Instructions 1-2-3 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mb-8 text-left">
+                <div class="p-4 border-2 border-zinc-900 rounded-xl bg-zinc-50">
+                    <div class="font-mono-custom font-bold text-lg mb-1 flex items-center gap-2">
+                        <span class="bg-zinc-900 text-white w-6 h-6 rounded-full inline-flex items-center justify-center text-xs">1</span>
+                        PRESS
+                    </div>
+                    <p class="text-xs text-zinc-600 font-medium">Start your 3-photo session when ready.</p>
+                </div>
+                <div class="p-4 border-2 border-zinc-900 rounded-xl bg-zinc-50">
+                    <div class="font-mono-custom font-bold text-lg mb-1 flex items-center gap-2">
+                        <span class="bg-zinc-900 text-white w-6 h-6 rounded-full inline-flex items-center justify-center text-xs">2</span>
+                        POSE
+                    </div>
+                    <p class="text-xs text-zinc-600 font-medium">Smile! Captures 3 continuous photos.</p>
+                </div>
+                <div class="p-4 border-2 border-zinc-900 rounded-xl bg-zinc-50">
+                    <div class="font-mono-custom font-bold text-lg mb-1 flex items-center gap-2">
+                        <span class="bg-zinc-900 text-white w-6 h-6 rounded-full inline-flex items-center justify-center text-xs">3</span>
+                        PRINT
+                    </div>
+                    <p class="text-xs text-zinc-600 font-medium">Decorate with stickers & print thermal strip.</p>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+                <button onclick="app.startPhotobooth()" class="flex-1 py-4 px-6 bg-zinc-900 hover:bg-zinc-800 text-white font-mono-custom text-lg font-bold rounded-xl border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="play" class="w-5 h-5"></i>
+                    START PHOTOBOOTH
+                </button>
+                <button onclick="app.showHowItWorksModal()" class="py-4 px-6 bg-white hover:bg-zinc-100 text-zinc-900 font-mono-custom text-md font-bold rounded-xl border-2 border-zinc-900 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="help-circle" class="w-5 h-5"></i>
+                    HOW IT WORKS
+                </button>
+            </div>
+        </section>
+
+
+        <!-- VIEW 2: CAMERA & CAPTURE SCREEN -->
+        <section id="viewCapture" class="hidden w-full max-w-4xl flex flex-col items-center">
+            
+            <!-- Progress Bar -->
+            <div class="w-full bg-white border-2 border-zinc-900 rounded-xl p-3 mb-4 flex items-center justify-between shadow-sm">
+                <div class="flex items-center gap-2">
+                    <span id="captureStepBadge" class="bg-zinc-900 text-white font-mono-custom font-bold text-xs px-2.5 py-1 rounded-md">
+                        PHOTO 1 OF 3
+                    </span>
+                    <span id="captureStatusText" class="text-sm font-semibold text-zinc-700">Align yourself & click capture</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btnSwitchCamera" onclick="app.switchCamera()" class="p-1.5 border-2 border-zinc-900 rounded-lg hover:bg-zinc-100 text-xs font-mono-custom font-bold flex items-center gap-1">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">FLIP</span>
+                    </button>
+                    <button onclick="app.confirmRestartSession()" class="p-1.5 border-2 border-zinc-900 rounded-lg hover:bg-zinc-100 text-xs font-mono-custom text-bold text-rose-600 flex items-center gap-1">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">CANCEL</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Video Live Feed Container -->
+            <div class="relative w-full max-w-2xl bg-zinc-950 border-4 border-zinc-900 rounded-2xl overflow-hidden aspect-[4/3] flex items-center justify-center shadow-[8px_8px_0px_0px_rgba(24,24,27,1)]">
+                
+                <!-- Live Video -->
+                <video id="cameraVideo" autoplay playsinline muted class="w-full h-full object-cover filter grayscale"></video>
+                
+                <!-- Simulated Pose Canvas (Fallback) -->
+                <canvas id="fallbackCanvas" class="hidden w-full h-full object-cover"></canvas>
+
+                <!-- Countdown Overlay -->
+                <div id="countdownOverlay" class="hidden absolute inset-0 bg-black/40 backdrop-blur-xs flex flex-col items-center justify-center z-20">
+                    <span id="countdownNumber" class="text-8xl sm:text-9xl font-black text-white font-mono-custom animate-ping">3</span>
+                    <span class="text-white font-mono-custom text-xl font-bold tracking-widest mt-4">GET READY!</span>
+                </div>
+
+                <!-- Frame Helper Lines overlay -->
+                <div class="absolute inset-0 border-2 border-white/20 pointer-events-none flex flex-col justify-between p-4">
+                    <div class="flex justify-between text-white/40 font-mono-custom text-[10px]">
+                        <span>[+] CTRL+P CAM</span>
+                        <span id="cameraResolutionText">1080p B&W</span>
+                    </div>
+                    <div class="self-center w-12 h-12 border border-white/30 rounded-full flex items-center justify-center text-white/30 text-xs font-mono-custom">+</div>
+                    <div class="text-right text-white/40 font-mono-custom text-[10px]"></div>
+                </div>
+            </div>
+
+            <!-- Capture Controls -->
+            <div class="mt-6 flex flex-wrap items-center justify-center gap-4 w-full max-w-md">
+                <button id="btnTriggerCapture" onclick="app.startCountdownAndCapture()" class="flex-1 py-4 px-8 bg-zinc-900 hover:bg-zinc-800 text-white font-mono-custom text-lg font-bold rounded-xl border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,0.3)] hover:shadow-none hover:translate-x-0.5 hover:translate-y-0.5 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="aperture" class="w-6 h-6"></i>
+                    TAKE PHOTO
+                </button>
+            </div>
+
+            <!-- Thumbnails Bar of Confirmed Photos -->
+            <div class="mt-6 w-full max-w-2xl bg-white border-2 border-zinc-900 rounded-xl p-3">
+                <div class="text-xs font-mono-custom font-bold text-zinc-500 mb-2 uppercase">Captured Shots (3 Required):</div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div id="thumbSlot0" class="aspect-[4/3] bg-zinc-100 border-2 border-dashed border-zinc-300 rounded-lg flex flex-col items-center justify-center text-zinc-400 font-mono-custom text-xs relative overflow-hidden">
+                        <span>SHOT 1</span>
+                    </div>
+                    <div id="thumbSlot1" class="aspect-[4/3] bg-zinc-100 border-2 border-dashed border-zinc-300 rounded-lg flex flex-col items-center justify-center text-zinc-400 font-mono-custom text-xs relative overflow-hidden">
+                        <span>SHOT 2</span>
+                    </div>
+                    <div id="thumbSlot2" class="aspect-[4/3] bg-zinc-100 border-2 border-dashed border-zinc-300 rounded-lg flex flex-col items-center justify-center text-zinc-400 font-mono-custom text-xs relative overflow-hidden">
+                        <span>SHOT 3</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- VIEW 3: PHOTO REVIEW / RETAKE MODAL / STEP -->
+        <section id="viewReview" class="hidden w-full max-w-2xl flex flex-col items-center bg-white border-2 border-zinc-900 rounded-2xl p-6 shadow-[8px_8px_0px_0px_rgba(24,24,27,1)]">
+            <h2 class="text-2xl font-bold font-mono-custom mb-1">REVIEW SHOT #<span id="reviewPhotoNum">1</span></h2>
+            <p class="text-xs text-zinc-500 font-mono-custom mb-4">Confirm this pose or retake it before continuing.</p>
+            
+            <div class="w-full aspect-[4/3] bg-zinc-900 rounded-xl border-2 border-zinc-900 overflow-hidden mb-6 relative">
+                <img id="reviewPhotoImg" src="" alt="Captured Pose" class="w-full h-full object-cover">
+            </div>
+
+            <div class="flex gap-4 w-full">
+                <button onclick="app.retakeCurrentPhoto()" class="flex-1 py-3 px-4 bg-white hover:bg-zinc-100 text-zinc-900 font-mono-custom font-bold text-md rounded-xl border-2 border-zinc-900 transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    RETAKE
+                </button>
+                <button onclick="app.confirmCurrentPhoto()" class="flex-1 py-3 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-mono-custom font-bold text-md rounded-xl border-2 border-zinc-900 shadow-[2px_2px_0px_0px_rgba(0,0,0,0.3)] transition-all flex items-center justify-center gap-2">
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                    CONFIRM & NEXT
+                </button>
+            </div>
+        </section>
+
+
+        <!-- VIEW 4: EDITOR & STICKER DECORATOR -->
+        <section id="viewEditor" class="hidden w-full max-w-5xl flex flex-col lg:flex-row gap-6 items-start">
+            
+            <!-- Left Column: Thermal Strip Canvas Container -->
+            <div class="w-full lg:w-1/2 flex flex-col items-center">
+                <div class="bg-white border-2 border-zinc-900 rounded-xl p-3 w-full mb-3 flex items-center justify-between">
+                    <span class="font-mono-custom font-bold text-xs uppercase flex items-center gap-1.5">
+                        <i data-lucide="edit-3" class="w-4 h-4"></i>
+                        STRIP PREVIEW (57mm Thermal Format)
+                    </span>
+                    <button onclick="app.resetStickers()" class="text-xs font-mono-custom font-bold text-rose-600 hover:underline flex items-center gap-1">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> RESET STICKERS
+                    </button>
+                </div>
+
+                <!-- Interactive Thermal Canvas Workspace -->
+                <div id="editorWorkspace" class="relative bg-zinc-200 border-2 border-zinc-900 rounded-xl p-4 flex justify-center items-center w-full min-h-[500px] overflow-hidden">
+                    <div id="canvasContainer" class="relative thermal-strip-preview bg-white border border-zinc-900 p-2 text-center" style="width: 260px;">
+                        <!-- Underneath Rendered Strip Canvas -->
+                        <canvas id="stripCanvas" class="w-full h-auto block rounded-xs border border-zinc-200 bg-white"></canvas>
+                        <!-- Sticker Interactive Layer overlay -->
+                        <div id="stickerLayer" class="absolute inset-0 pointer-events-auto overflow-hidden"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Sticker Palette & Control Panel -->
+            <div class="w-full lg:w-1/2 bg-white border-2 border-zinc-900 rounded-2xl p-5 shadow-[6px_6px_0px_0px_rgba(24,24,27,1)] flex flex-col justify-between">
+                <div>
+                    <h3 class="text-xl font-bold font-mono-custom mb-1 flex items-center gap-2">
+                        <i data-lucide="smile" class="w-5 h-5"></i>
+                        MONOCHROME STICKERS
+                    </h3>
+                    <p class="text-xs text-zinc-500 font-mono-custom mb-4">Tap any sticker to add to your photo strip. Drag, resize, or rotate on screen.</p>
+
+                    <!-- Sticker Categories Tabs -->
+                    <div class="flex gap-2 border-b-2 border-zinc-200 pb-2 mb-4 overflow-x-auto text-xs font-mono-custom font-bold">
+                        <button onclick="app.setStickerCategory('all')" class="sticker-cat-btn px-3 py-1 bg-zinc-900 text-white rounded-lg">ALL</button>
+                        <button onclick="app.setStickerCategory('cute')" class="sticker-cat-btn px-3 py-1 bg-zinc-100 text-zinc-800 rounded-lg hover:bg-zinc-200">CUTE</button>
+                        <button onclick="app.setStickerCategory('doodles')" class="sticker-cat-btn px-3 py-1 bg-zinc-100 text-zinc-800 rounded-lg hover:bg-zinc-200">DOODLES</button>
+                        <button onclick="app.setStickerCategory('text')" class="sticker-cat-btn px-3 py-1 bg-zinc-100 text-zinc-800 rounded-lg hover:bg-zinc-200">TEXT</button>
+                        <button onclick="app.setStickerCategory('frames')" class="sticker-cat-btn px-3 py-1 bg-zinc-100 text-zinc-800 rounded-lg hover:bg-zinc-200">FRAMES</button>
+                    </div>
+
+                    <!-- Stickers Grid -->
+                    <div id="stickerGrid" class="grid grid-cols-4 sm:grid-cols-5 gap-3 max-h-[260px] overflow-y-auto p-1 border-2 border-zinc-100 rounded-xl bg-zinc-50/50">
+                        <!-- Dynamic Stickers Injected Here -->
+                    </div>
+                </div>
+
+                <!-- Editor Action Buttons -->
+                <div class="mt-6 pt-4 border-t-2 border-zinc-200 flex flex-col sm:flex-row gap-3">
+                    <button onclick="app.showCaptureView(true)" class="py-3 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-mono-custom font-bold text-sm rounded-xl border-2 border-zinc-900 transition-all flex items-center justify-center gap-1.5">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i> RETAKE ALL
+                    </button>
+                    <button onclick="app.finishEditingAndProceed()" class="flex-1 py-3 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-mono-custom font-bold text-sm rounded-xl border-2 border-zinc-900 shadow-[3px_3px_0px_0px_rgba(0,0,0,0.3)] transition-all flex items-center justify-center gap-2">
+                        FINISH & PRINT STRIP
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- VIEW 5: FINAL PREVIEW, PRINT & QR DELIVERY HUB -->
+        <section id="viewFinal" class="hidden w-full max-w-4xl flex flex-col items-center">
+            
+            <div class="text-center mb-6">
+                <div class="inline-flex items-center gap-2 px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full font-mono-custom text-xs font-bold mb-2">
+                    <i data-lucide="check-circle-2" class="w-4 h-4"></i> SESSION COMPLETE
+                </div>
+                <h2 class="text-3xl font-extrabold font-mono-custom">YOUR CTRL+P STRIP IS READY!</h2>
+                <p class="text-sm text-zinc-600 font-mono-custom">Print your continuous thermal strip or scan the QR code for digital HD downloads.</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 w-full items-start">
+                
+                <!-- Final Decorated Strip Canvas Display -->
+                <div class="flex flex-col items-center bg-white border-2 border-zinc-900 rounded-2xl p-4 shadow-[6px_6px_0px_0px_rgba(24,24,27,1)]">
+                    <div class="text-xs font-mono-custom font-bold text-zinc-500 mb-3 flex items-center gap-2">
+                        <i data-lucide="file-text" class="w-4 h-4"></i> FINAL PRINT COMPOSED STRIP
+                    </div>
+                    <div class="p-2 bg-zinc-100 border border-zinc-300 rounded-xl overflow-hidden thermal-strip-preview">
+                        <img id="finalStripImage" src="" alt="Final Strip" class="w-[220px] h-auto block rounded-sm bg-white">
+                    </div>
+                </div>
+
+                <!-- Print & Digital Download Options -->
+                <div class="flex flex-col gap-4">
+                    
+                    <!-- Option 1: Thermal Printer Actions -->
+                    <div class="bg-white border-2 border-zinc-900 rounded-2xl p-5 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)]">
+                        <h3 class="font-mono-custom font-bold text-md mb-2 flex items-center gap-2">
+                            <i data-lucide="printer" class="w-5 h-5"></i>
+                            1. PRINT STRIP (LIOTOG C19)
+                        </h3>
+                        <p class="text-xs text-zinc-500 font-mono-custom mb-4">Connect thermal printer via Bluetooth or download print-ready image for Fun Print app.</p>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <button onclick="app.printDirectWebBluetooth()" class="py-3 px-3 bg-zinc-900 hover:bg-zinc-800 text-white font-mono-custom font-bold text-xs rounded-xl border-2 border-zinc-900 flex items-center justify-center gap-2">
+                                <i data-lucide="bluetooth" class="w-4 h-4"></i> BLUETOOTH PRINT
+                            </button>
+                            <button onclick="app.triggerBrowserPrint()" class="py-3 px-3 bg-white hover:bg-zinc-100 text-zinc-900 font-mono-custom font-bold text-xs rounded-xl border-2 border-zinc-900 flex items-center justify-center gap-2">
+                                <i data-lucide="printer" class="w-4 h-4"></i> SYSTEM PRINT
+                            </button>
+                        </div>
+                        <button onclick="app.showPrinterAppInstructions()" class="mt-2 w-full py-2 px-3 text-xs font-mono-custom font-bold text-zinc-600 hover:text-zinc-900 underline text-center block">
+                            How to print using LIOTOG C19 / Fun Print app?
+                        </button>
+                    </div>
+
+                    <!-- Option 2: Digital QR Code Gallery -->
+                    <div class="bg-white border-2 border-zinc-900 rounded-2xl p-5 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] flex flex-col items-center text-center">
+                        <h3 class="font-mono-custom font-bold text-md mb-1 flex items-center gap-2">
+                            <i data-lucide="qr-code" class="w-5 h-5"></i>
+                            2. DIGITAL GALLERY SCAN
+                        </h3>
+                        <p class="text-xs text-zinc-500 font-mono-custom mb-3">Scan with mobile camera to view & download photos.</p>
+                        
+                        <div class="p-3 bg-white border-2 border-zinc-900 rounded-xl mb-3 shadow-inner inline-block">
+                            <div id="qrcode" class="w-[140px] h-[140px] flex items-center justify-center"></div>
+                        </div>
+
+                        <div class="flex flex-wrap justify-center gap-2 w-full">
+                            <button onclick="app.downloadFile('strip')" class="py-2 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-mono-custom font-bold text-xs rounded-lg border border-zinc-900 flex items-center gap-1">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i> STRIP PNG
+                            </button>
+                            <button onclick="app.downloadAllZip()" class="py-2 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-mono-custom font-bold text-xs rounded-lg border border-zinc-900 flex items-center gap-1">
+                                <i data-lucide="file-archive" class="w-3.5 h-3.5"></i> ALL PHOTOS (.ZIP/ALL)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- End Session Button -->
+                    <button onclick="app.startNewSession()" class="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-zinc-950 font-mono-custom font-extrabold text-md rounded-2xl border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(24,24,27,1)] transition-all flex items-center justify-center gap-2">
+                        <i data-lucide="rotate-cw" class="w-5 h-5"></i>
+                        START NEW SESSION
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer Tagline -->
+    <footer class="relative z-10 w-full py-3 px-4 border-t-2 border-zinc-900 bg-white text-center font-mono-custom text-xs text-zinc-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div>CTRL+P PHOTOBOOTH</div>
+        <div class="font-bold text-zinc-800">PRESS. POSE. PRINT.</div>
+    </footer>
+
+
+    <!-- MODAL 1: OPERATOR / ADMIN SETTINGS MODAL -->
+    <div id="adminModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div class="bg-white border-4 border-zinc-900 rounded-2xl max-w-xl w-full p-6 max-h-[90vh] overflow-y-auto shadow-[12px_12px_0px_0px_rgba(24,24,27,1)]">
+            <div class="flex items-center justify-between border-b-2 border-zinc-900 pb-3 mb-4">
+                <div class="font-mono-custom font-extrabold text-xl flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-5 h-5"></i>
+                    ADMIN & HARDWARE SETTINGS
+                </div>
+                <button onclick="app.toggleAdminModal(false)" class="p-1 hover:bg-zinc-100 rounded-lg">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 font-mono-custom text-xs">
+                
+                <!-- Hardware / Printer Config -->
+                <div class="p-3 border-2 border-zinc-900 rounded-xl bg-zinc-50">
+                    <div class="font-bold text-sm mb-2 text-zinc-900 flex items-center gap-1.5">
+                        <i data-lucide="printer" class="w-4 h-4"></i> THERMAL PRINTER SETTINGS (C19)
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-zinc-600 mb-1">Paper Format</label>
+                            <select id="cfgPaperFormat" class="w-full p-2 border-2 border-zinc-900 rounded-lg bg-white font-bold">
+                                <option value="57x30">57mm x 30mm Continuous Roll</option>
+                                <option value="57x100">57mm High Density Strip</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-zinc-600 mb-1">Dithering / Monochrome</label>
+                            <select id="cfgDitherMode" class="w-full p-2 border-2 border-zinc-900 rounded-lg bg-white font-bold">
+                                <option value="atkinson">Atkinson Dither (High Detail)</option>
+                                <option value="floyd">Floyd-Steinberg (Smooth)</option>
+                                <option value="threshold">High Contrast Threshold</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Camera / Capture Config -->
+                <div class="p-3 border-2 border-zinc-900 rounded-xl bg-zinc-50">
+                    <div class="font-bold text-sm mb-2 text-zinc-900 flex items-center gap-1.5">
+                        <i data-lucide="camera" class="w-4 h-4"></i> CAPTURE CONFIG
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-zinc-600 mb-1">Countdown Duration</label>
+                            <select id="cfgCountdown" class="w-full p-2 border-2 border-zinc-900 rounded-lg bg-white font-bold">
+                                <option value="3">3 Seconds</option>
+                                <option value="5">5 Seconds</option>
+                                <option value="1">1 Second (Fast)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-zinc-600 mb-1">Audio Beep Flash</label>
+                            <select id="cfgFlashBeep" class="w-full p-2 border-2 border-zinc-900 rounded-lg bg-white font-bold">
+                                <option value="true">Enabled</option>
+                                <option value="false">Muted</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Branding Config -->
+                <div class="p-3 border-2 border-zinc-900 rounded-xl bg-zinc-50">
+                    <div class="font-bold text-sm mb-2 text-zinc-900 flex items-center gap-1.5">
+                        <i data-lucide="type" class="w-4 h-4"></i> STRIP BRANDING TEXT
+                    </div>
+                    <div>
+                        <label class="block text-zinc-600 mb-1">Footer Tagline</label>
+                        <input id="cfgTagline" type="text" value="PRESS. POSE. PRINT." class="w-full p-2 border-2 border-zinc-900 rounded-lg bg-white font-bold">
+                    </div>
+                </div>
+
+                <!-- System Diagnostics & Actions -->
+                <div class="p-3 border-2 border-zinc-900 rounded-xl bg-zinc-50">
+                    <div class="font-bold text-sm mb-2 text-zinc-900">DIAGNOSTICS</div>
+                    <div class="flex gap-2">
+                        <button onclick="app.testPrintPattern()" class="py-2 px-3 bg-zinc-900 text-white font-bold rounded-lg border border-zinc-900">
+                            TEST THERMAL CANVAS
+                        </button>
+                        <button onclick="app.clearSessionHistory()" class="py-2 px-3 bg-rose-100 text-rose-800 font-bold rounded-lg border border-rose-300">
+                            PURGE LOCAL SESSIONS
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button onclick="app.saveAdminSettings()" class="py-3 px-6 bg-zinc-900 text-white font-mono-custom font-bold rounded-xl border-2 border-zinc-900">
+                    SAVE & CLOSE
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- MODAL 2: HOW IT WORKS MODAL -->
+    <div id="howModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div class="bg-white border-4 border-zinc-900 rounded-2xl max-w-lg w-full p-6 shadow-[10px_10px_0px_0px_rgba(24,24,27,1)]">
+            <div class="flex items-center justify-between border-b-2 border-zinc-900 pb-3 mb-4">
+                <div class="font-mono-custom font-extrabold text-xl">HOW CTRL+P WORKS</div>
+                <button onclick="app.toggleHowModal(false)" class="p-1 hover:bg-zinc-100 rounded-lg">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="space-y-3 font-mono-custom text-xs leading-relaxed text-zinc-700">
+                <p><strong>1. Three-Shot Sequence:</strong> You will take 3 continuous poses with a countdown timer. You can review and retake any shot individually.</p>
+                <p><strong>2. Pure B&W Dithering:</strong> All photographs are processed with a thermal dither algorithm optimized for black-and-white print quality on 57mm mini thermal printers like the LIOTOG C19.</p>
+                <p><strong>3. Monochrome Stickers:</strong> Decorate your photo strip layout using touch-and-drag monochrome stickers.</p>
+                <p><strong>4. Dual Output:</strong> Print directly to Bluetooth thermal printers, save high-res PNG strips, or scan the generated QR code to download digital gallery copies on your phone.</p>
+            </div>
+            <div class="mt-6">
+                <button onclick="app.toggleHowModal(false)" class="w-full py-3 bg-zinc-900 text-white font-mono-custom font-bold rounded-xl">GOT IT</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- MODAL 3: LIOTOG C19 / FUN PRINT INSTRUCTIONS MODAL -->
+    <div id="printerHelpModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div class="bg-white border-4 border-zinc-900 rounded-2xl max-w-md w-full p-6 shadow-[10px_10px_0px_0px_rgba(24,24,27,1)]">
+            <div class="flex items-center justify-between border-b-2 border-zinc-900 pb-3 mb-4">
+                <div class="font-mono-custom font-extrabold text-lg flex items-center gap-2">
+                    <i data-lucide="printer" class="w-5 h-5"></i> C19 PRINTING GUIDE
+                </div>
+                <button onclick="app.togglePrinterHelpModal(false)" class="p-1 hover:bg-zinc-100 rounded-lg">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="space-y-3 font-mono-custom text-xs text-zinc-700">
+                <div class="p-3 bg-zinc-100 border border-zinc-300 rounded-lg">
+                    <strong>Method A: Companion App (Fun Print / WalkPrint)</strong>
+                    <ol class="list-decimal pl-4 mt-1 space-y-1">
+                        <li>Tap "STRIP PNG" below to save the strip image to your iPad/device gallery.</li>
+                        <li>Open the <em>Fun Print</em> or <em>WalkPrint</em> app connected to your C19 printer.</li>
+                        <li>Select "Picture Print" -> choose saved CTRL+P strip PNG -> Print!</li>
+                    </ol>
+                </div>
+                <div class="p-3 bg-zinc-100 border border-zinc-300 rounded-lg">
+                    <strong>Method B: Web Bluetooth Direct</strong>
+                    <p class="mt-1">Click "BLUETOOTH PRINT" to pair with supported ESC/POS thermal printers directly from Chrome/iPad web browser.</p>
+                </div>
+            </div>
+            <div class="mt-5">
+                <button onclick="app.togglePrinterHelpModal(false)" class="w-full py-2.5 bg-zinc-900 text-white font-mono-custom font-bold rounded-xl">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Hidden Standalone Printable Container for Window.print() -->
+    <div id="printArea" class="hidden">
+        <img id="printAreaImg" src="" style="width: 57mm; max-width: 100%; display: block; margin: 0 auto;">
+    </div>
+
+
+    <!-- APPLICATION JAVASCRIPT ARCHITECTURE -->
+    <script>
+        /**
+         * CTRL+P — PRESS. POSE. PRINT.
+         * Complete Responsive Photobooth Web Application
+         */
+
+        const STICKER_DATABASE = [
+            { id: 's1', cat: 'cute', name: 'Heart', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>` },
+            { id: 's2', cat: 'cute', name: 'Star', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>` },
+            { id: 's3', cat: 'cute', name: 'Sparkles', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L9.5 8.5 3 11l6.5 2.5L12 20l2.5-6.5L21 11l-6.5-2.5z"/></svg>` },
+            { id: 's4', cat: 'cute', name: 'Smiley', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9" stroke-width="3"/><line x1="15" y1="9" x2="15.01" y2="9" stroke-width="3"/></svg>` },
+            { id: 's5', cat: 'cute', name: 'Bow', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 10a2 2 0 100 4 2 2 0 000-4zm-3 2c-3-3-7-1-7 2s4 3 7 0zm6 0c3-3 7-1 7 2s-4 3-7 0z"/></svg>` },
+            { id: 's6', cat: 'doodles', name: 'Camera', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm8 3a5 5 0 100 10 5 5 0 000-10z"/></svg>` },
+            { id: 's7', cat: 'doodles', name: 'Peace', svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2v20M12 12l6 6M12 12l-6 6"/></svg>` },
+            { id: 's8', cat: 'doodles', name: 'Music Note', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v10.55A4 4 0 1014 17V7h4V3h-6z"/></svg>` },
+            { id: 's9', cat: 'text', name: 'CTRL+P Badge', svg: `<svg viewBox="0 0 100 30"><rect width="100" height="30" rx="6" fill="#000"/><text x="50" y="20" fill="#fff" font-family="monospace" font-weight="bold" font-size="14" text-anchor="middle">CTRL+P</text></svg>` },
+            { id: 's10', cat: 'text', name: 'SMILE Stamp', svg: `<svg viewBox="0 0 90 30"><rect width="90" height="30" rx="15" fill="#000"/><text x="45" y="20" fill="#fff" font-family="sans-serif" font-weight="900" font-size="14" text-anchor="middle">SMILE!</text></svg>` },
+            { id: 's11', cat: 'text', name: 'VIP Stamp', svg: `<svg viewBox="0 0 70 30"><rect width="70" height="30" rx="4" fill="none" stroke="#000" stroke-width="4"/><text x="35" y="21" fill="#000" font-family="sans-serif" font-weight="900" font-size="16" text-anchor="middle">VIP</text></svg>` },
+            { id: 's12', cat: 'frames', name: 'Flower', svg: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a4 4 0 00-4 4 4 4 0 00-4 4 4 4 0 004 4 4 4 0 004 4 4 4 0 004-4 4 4 0 004-4 4 4 0 00-4-4 4 4 0 00-4-4zm0 6a2 2 0 110 4 2 2 0 010-4z"/></svg>` }
+        ];
+
+        class CtrlPPhotobooth {
+            constructor() {
+                // Application State
+                this.sessionId = this.generateSessionId();
+                this.currentStep = 'welcome'; // welcome, capture, review, editor, final
+                this.capturedPhotos = []; // array of 3 data URLs
+                this.currentCaptureIndex = 0;
+                this.tempCapturedData = null;
+                this.placedStickers = []; // active placed stickers on strip
+                
+                // Hardware & User Settings
+                this.config = {
+                    countdown: 3,
+                    paperFormat: '57x30',
+                    ditherMode: 'atkinson',
+                    flashBeep: true,
+                    tagline: 'PRESS. POSE. PRINT.'
+                };
+
+                // Media Stream Handles
+                this.mediaStream = null;
+                this.activeCameraFacing = 'user'; // 'user' or 'environment'
+
+                // Canvas Handles
+                this.stripCanvas = null;
+                this.stripCtx = null;
+                
+                // Active sticker selection & drag state
+                this.selectedStickerIndex = null;
+                this.isDraggingSticker = false;
+                this.dragOffset = { x: 0, y: 0 };
+
+                this.init();
+            }
+
+            init() {
+                // Initialize Lucide Icons
+                lucide.createIcons();
+                
+                // Display Session ID Badge
+                document.getElementById('currentSessionIdDisplay').innerText = this.sessionId;
+                
+                // Initialize Canvases
+                this.stripCanvas = document.getElementById('stripCanvas');
+                this.stripCtx = this.stripCanvas.getContext('2d');
+
+                // Render Sticker Library
+                this.renderStickerGrid('all');
+
+                // Bind touch / mouse sticker events
+                this.setupStickerInteractionListeners();
+
+                console.log('CTRL+P Photobooth Application Initialized');
+            }
+
+            generateSessionId() {
+                const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+                let id = 'CP-';
+                for (let i = 0; i < 5; i++) {
+                    id += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                return id;
+            }
+
+            // --- VIEW NAVIGATION ---
+            hideAllViews() {
+                ['viewWelcome', 'viewCapture', 'viewReview', 'viewEditor', 'viewFinal'].forEach(id => {
+                    document.getElementById(id).classList.add('hidden');
+                });
+            }
+
+            showWelcome() {
+                this.stopCamera();
+                this.hideAllViews();
+                document.getElementById('viewWelcome').classList.remove('hidden');
+                this.currentStep = 'welcome';
+            }
+
+            startPhotobooth() {
+                this.capturedPhotos = [];
+                this.currentCaptureIndex = 0;
+                this.placedStickers = [];
+                this.showCaptureView();
+            }
+
+            async showCaptureView(isReset = false) {
+                if (isReset) {
+                    this.capturedPhotos = [];
+                    this.currentCaptureIndex = 0;
+                }
+                this.hideAllViews();
+                document.getElementById('viewCapture').classList.remove('hidden');
+                this.currentStep = 'capture';
+                this.updateCaptureUI();
+                await this.initCamera();
+            }
+
+            // --- CAMERA HANDLING ---
+            async initCamera() {
+                const videoEl = document.getElementById('cameraVideo');
+                const fallbackCanvas = document.getElementById('fallbackCanvas');
+
+                try {
+                    if (this.mediaStream) {
+                        this.stopCamera();
+                    }
+
+                    const constraints = {
+                        video: {
+                            facingMode: this.activeCameraFacing,
+                            width: { ideal: 1280 },
+                            height: { ideal: 960 }
+                        },
+                        audio: false
+                    };
+
+                    this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    videoEl.srcObject = this.mediaStream;
+                    videoEl.classList.remove('hidden');
+                    fallbackCanvas.classList.add('hidden');
+                } catch (err) {
+                    console.warn('Camera access error or unsupported. Switching to simulated pose camera:', err);
+                    videoEl.classList.add('hidden');
+                    fallbackCanvas.classList.remove('hidden');
+                    this.renderSimulatedCameraFeed();
+                }
+            }
+
+            stopCamera() {
+                if (this.mediaStream) {
+                    this.mediaStream.getTracks().forEach(track => track.stop());
+                    this.mediaStream = null;
+                }
+            }
+
+            async switchCamera() {
+                this.activeCameraFacing = this.activeCameraFacing === 'user' ? 'environment' : 'user';
+                await this.initCamera();
+            }
+
+            renderSimulatedCameraFeed() {
+                const canvas = document.getElementById('fallbackCanvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = 640;
+                canvas.height = 480;
+
+                const drawFrame = () => {
+                    if (this.currentStep !== 'capture') return;
+                    ctx.fillStyle = '#18181b';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Simulated Pose Silhouette
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(320, 180, 70, 0, Math.PI * 2); // Head
+                    ctx.stroke();
+
+                    ctx.beginPath();
+                    ctx.arc(320, 420, 150, Math.PI, 0); // Body
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 16px "JetBrains Mono"';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`SIMULATED CAMERA (SHOT #${this.currentCaptureIndex + 1})`, 320, 40);
+
+                    requestAnimationFrame(drawFrame);
+                };
+                drawFrame();
+            }
+
+            updateCaptureUI() {
+                document.getElementById('captureStepBadge').innerText = `PHOTO ${this.currentCaptureIndex + 1} OF 3`;
+                
+                // Update Thumbnail slots
+                for (let i = 0; i < 3; i++) {
+                    const slot = document.getElementById(`thumbSlot${i}`);
+                    if (this.capturedPhotos[i]) {
+                        slot.innerHTML = `<img src="${this.capturedPhotos[i]}" class="w-full h-full object-cover">`;
+                        slot.classList.remove('border-dashed');
+                        slot.classList.add('border-solid', 'border-zinc-900');
+                    } else {
+                        slot.innerHTML = `<span>SHOT ${i + 1}</span>`;
+                        slot.classList.add('border-dashed');
+                        slot.classList.remove('border-solid', 'border-zinc-900');
+                    }
+                }
+            }
+
+            startCountdownAndCapture() {
+                let count = parseInt(this.config.countdown) || 3;
+                const overlay = document.getElementById('countdownOverlay');
+                const numEl = document.getElementById('countdownNumber');
+                
+                overlay.classList.remove('hidden');
+                numEl.innerText = count;
+
+                const timer = setInterval(() => {
+                    count--;
+                    if (count > 0) {
+                        numEl.innerText = count;
+                    } else {
+                        clearInterval(timer);
+                        overlay.classList.add('hidden');
+                        this.capturePhoto();
+                    }
+                }, 1000);
+            }
+
+            capturePhoto() {
+                // Trigger Camera Flash Effect
+                if (this.config.flashBeep) {
+                    const flash = document.getElementById('flashOverlay');
+                    flash.style.opacity = '0.9';
+                    setTimeout(() => flash.style.opacity = '0', 200);
+                }
+
+                // Snap photo to hidden canvas
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = 800;
+                tempCanvas.height = 600;
+                const ctx = tempCanvas.getContext('2d');
+
+                const videoEl = document.getElementById('cameraVideo');
+                const fallbackCanvas = document.getElementById('fallbackCanvas');
+
+                if (!videoEl.classList.contains('hidden') && videoEl.videoWidth) {
+                    ctx.drawImage(videoEl, 0, 0, tempCanvas.width, tempCanvas.height);
+                } else {
+                    ctx.drawImage(fallbackCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
+                }
+
+                // Convert to High Contrast B&W Grayscale
+                const bwDataUrl = this.processGrayscale(tempCanvas);
+                this.tempCapturedData = bwDataUrl;
+
+                // Show Review Step
+                this.showReviewStep();
+            }
+
+            processGrayscale(canvas) {
+                const ctx = canvas.getContext('2d');
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imgData.data;
+
+                for (let i = 0; i < data.length; i += 4) {
+                    // Weighted Grayscale luminosity algorithm
+                    let gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+                    
+                    // Contrast boost
+                    gray = (gray - 128) * 1.2 + 128;
+                    gray = Math.max(0, Math.min(255, gray));
+
+                    data[i] = gray;     // R
+                    data[i + 1] = gray; // G
+                    data[i + 2] = gray; // B
+                }
+
+                ctx.putImageData(imgData, 0, 0);
+                return canvas.toDataURL('image/png');
+            }
+
+            showReviewStep() {
+                this.hideAllViews();
+                document.getElementById('viewReview').classList.remove('hidden');
+                document.getElementById('reviewPhotoNum').innerText = this.currentCaptureIndex + 1;
+                document.getElementById('reviewPhotoImg').src = this.tempCapturedData;
+            }
+
+            retakeCurrentPhoto() {
+                this.tempCapturedData = null;
+                this.showCaptureView();
+            }
+
+            confirmCurrentPhoto() {
+                this.capturedPhotos[this.currentCaptureIndex] = this.tempCapturedData;
+                this.currentCaptureIndex++;
+
+                if (this.currentCaptureIndex < 3) {
+                    this.showCaptureView();
+                } else {
+                    // All 3 photos captured! Proceed to Editor
+                    this.stopCamera();
+                    this.openStickerEditor();
+                }
+            }
+
+            confirmRestartSession() {
+                if (confirm("Cancel current session and return to welcome screen?")) {
+                    this.showWelcome();
+                }
+            }
+
+            // --- STICKER EDITOR & CANVASES ---
+            openStickerEditor() {
+                this.hideAllViews();
+                document.getElementById('viewEditor').classList.remove('hidden');
+                this.currentStep = 'editor';
+                this.renderCompositeThermalStrip();
+            }
+
+            renderCompositeThermalStrip() {
+                // Thermal Canvas dimensions (57mm format ratio)
+                const width = 400; // px
+                const height = 1100; // px (Vertical 3-photo strip layout)
+                
+                this.stripCanvas.width = width;
+                this.stripCanvas.height = height;
+
+                const ctx = this.stripCtx;
+                
+                // Background Paper White
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, width, height);
+
+                // Top Branding Header
+                ctx.fillStyle = '#000000';
+                ctx.font = '900 24px "JetBrains Mono", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('CTRL+P', width / 2, 45);
+
+                ctx.font = '600 11px "JetBrains Mono", monospace';
+                ctx.fillText(this.config.tagline || 'PRESS. POSE. PRINT.', width / 2, 65);
+
+                ctx.fillRect(20, 75, width - 40, 2); // Divider
+
+                // Draw the 3 photos vertically
+                let startY = 90;
+                const photoWidth = 360;
+                const photoHeight = 270;
+
+                const loadPromises = this.capturedPhotos.map((src, idx) => {
+                    return new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const y = startY + idx * (photoHeight + 25);
+                            
+                            // Photo border frame
+                            ctx.strokeStyle = '#000000';
+                            ctx.lineWidth = 2;
+                            ctx.strokeRect(20, y, photoWidth, photoHeight);
+                            
+                            // Draw B&W Photo
+                            ctx.drawImage(img, 20, y, photoWidth, photoHeight);
+
+                            // Photo Sub-label
+                            ctx.fillStyle = '#000000';
+                            ctx.font = 'bold 10px monospace';
+                            ctx.textAlign = 'right';
+                            ctx.fillText(`SHOT 0${idx + 1} / CTRL+P`, 20 + photoWidth - 4, y + photoHeight + 14);
+
+                            resolve();
+                        };
+                        img.src = src;
+                    });
+                });
+
+                Promise.all(loadPromises).then(() => {
+                    // Footer Details
+                    const footerY = height - 50;
+                    ctx.fillRect(20, footerY - 15, width - 40, 2);
+
+                    ctx.font = 'bold 12px "JetBrains Mono", monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`SESSION: ${this.sessionId}`, width / 2, footerY + 5);
+
+                    const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    ctx.font = '10px monospace';
+                    ctx.fillText(`${dateStr} • THERMAL PRINT READY`, width / 2, footerY + 22);
+
+                    // Apply Thermal Dithering algorithm if selected
+                    if (this.config.ditherMode === 'atkinson') {
+                        this.applyAtkinsonDither(this.stripCanvas);
+                    }
+                });
+            }
+
+            applyAtkinsonDither(canvas) {
+                const ctx = canvas.getContext('2d');
+                const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imgData.data;
+                const w = canvas.width;
+                const h = canvas.height;
+
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const i = (y * w + x) * 4;
+                        const oldPixel = data[i]; // Gray scale value
+                        const newPixel = oldPixel < 128 ? 0 : 255;
+                        const err = Math.floor((oldPixel - newPixel) / 8);
+
+                        data[i] = data[i + 1] = data[i + 2] = newPixel;
+
+                        // Distribute Atkinson error to neighbors
+                        const neighbors = [
+                            [x + 1, y], [x + 2, y],
+                            [x - 1, y + 1], [x, y + 1], [x + 1, y + 1],
+                            [x, y + 2]
+                        ];
+
+                        for (let [nx, ny] of neighbors) {
+                            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                                const ni = (ny * w + nx) * 4;
+                                data[ni] = Math.max(0, Math.min(255, data[ni] + err));
+                            }
+                        }
+                    }
+                }
+                ctx.putImageData(imgData, 0, 0);
+            }
+
+            renderStickerGrid(cat = 'all') {
+                const grid = document.getElementById('stickerGrid');
+                grid.innerHTML = '';
+
+                const filtered = cat === 'all' 
+                    ? STICKER_DATABASE 
+                    : STICKER_DATABASE.filter(s => s.cat === cat);
+
+                filtered.forEach(stk => {
+                    const btn = document.createElement('button');
+                    btn.className = 'aspect-square bg-white border-2 border-zinc-900 rounded-lg p-2 hover:bg-zinc-100 active:scale-95 flex items-center justify-center';
+                    btn.innerHTML = `<div class="w-8 h-8 text-zinc-950">${stk.svg}</div>`;
+                    btn.onclick = () => this.addStickerToStrip(stk);
+                    grid.appendChild(btn);
+                });
+            }
+
+            setStickerCategory(cat) {
+                document.querySelectorAll('.sticker-cat-btn').forEach(btn => {
+                    btn.className = 'sticker-cat-btn px-3 py-1 bg-zinc-100 text-zinc-800 rounded-lg hover:bg-zinc-200';
+                });
+                event.target.className = 'sticker-cat-btn px-3 py-1 bg-zinc-900 text-white rounded-lg';
+                this.renderStickerGrid(cat);
+            }
+
+            addStickerToStrip(stk) {
+                const stickerObj = {
+                    id: Date.now(),
+                    svg: stk.svg,
+                    x: 80 + Math.random() * 40,
+                    y: 150 + Math.random() * 300,
+                    size: 60,
+                    rotation: 0
+                };
+                this.placedStickers.push(stickerObj);
+                this.renderPlacedStickers();
+            }
+
+            renderPlacedStickers() {
+                const layer = document.getElementById('stickerLayer');
+                layer.innerHTML = '';
+
+                this.placedStickers.forEach((stk, idx) => {
+                    const el = document.createElement('div');
+                    el.className = `absolute cursor-move touch-none select-none ${this.selectedStickerIndex === idx ? 'ring-2 ring-zinc-900 ring-offset-2' : ''}`;
+                    el.style.left = `${stk.x}px`;
+                    el.style.top = `${stk.y}px`;
+                    el.style.width = `${stk.size}px`;
+                    el.style.height = `${stk.size}px`;
+                    el.style.transform = `rotate(${stk.rotation}deg)`;
+
+                    el.innerHTML = `
+                        <div class="w-full h-full text-zinc-950">${stk.svg}</div>
+                        ${this.selectedStickerIndex === idx ? `
+                            <button onclick="app.removeSticker(${idx})" class="absolute -top-2 -right-2 bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold shadow">×</button>
+                        ` : ''}
+                    `;
+
+                    el.onmousedown = (e) => this.startDragSticker(e, idx);
+                    el.ontouchstart = (e) => this.startDragSticker(e, idx);
+
+                    layer.appendChild(el);
+                });
+            }
+
+            startDragSticker(e, idx) {
+                e.preventDefault();
+                this.selectedStickerIndex = idx;
+                this.isDraggingSticker = true;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                const stk = this.placedStickers[idx];
+                this.dragOffset = {
+                    x: clientX - stk.x,
+                    y: clientY - stk.y
+                };
+                this.renderPlacedStickers();
+            }
+
+            setupStickerInteractionListeners() {
+                const onMove = (e) => {
+                    if (!this.isDraggingSticker || this.selectedStickerIndex === null) return;
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+                    const stk = this.placedStickers[this.selectedStickerIndex];
+                    stk.x = clientX - this.dragOffset.x;
+                    stk.y = clientY - this.dragOffset.y;
+                    this.renderPlacedStickers();
+                };
+
+                const onEnd = () => {
+                    this.isDraggingSticker = false;
+                };
+
+                window.addEventListener('mousemove', onMove);
+                window.addEventListener('mouseup', onEnd);
+                window.addEventListener('touchmove', onMove);
+                window.addEventListener('touchend', onEnd);
+            }
+
+            removeSticker(idx) {
+                this.placedStickers.splice(idx, 1);
+                this.selectedStickerIndex = null;
+                this.renderPlacedStickers();
+            }
+
+            resetStickers() {
+                this.placedStickers = [];
+                this.selectedStickerIndex = null;
+                this.renderPlacedStickers();
+            }
+
+            finishEditingAndProceed() {
+                // Bake stickers into final composite image
+                const finalCanvas = document.createElement('canvas');
+                finalCanvas.width = this.stripCanvas.width;
+                finalCanvas.height = this.stripCanvas.height;
+                const ctx = finalCanvas.getContext('2d');
+
+                // Draw base strip
+                ctx.drawImage(this.stripCanvas, 0, 0);
+
+                // Draw placed stickers onto final canvas
+                const containerWidth = 260; // preview container width
+                const scaleRatio = finalCanvas.width / containerWidth;
+
+                this.placedStickers.forEach(stk => {
+                    const img = new Image();
+                    const svgBlob = new Blob([stk.svg], { type: 'image/svg+xml;charset=utf-8' });
+                    const url = URL.createObjectURL(svgBlob);
+
+                    img.onload = () => {
+                        ctx.save();
+                        const cx = (stk.x + stk.size / 2) * scaleRatio;
+                        const cy = (stk.y + stk.size / 2) * scaleRatio;
+                        ctx.translate(cx, cy);
+                        ctx.rotate((stk.rotation * Math.PI) / 180);
+                        ctx.drawImage(img, (-stk.size / 2) * scaleRatio, (-stk.size / 2) * scaleRatio, stk.size * scaleRatio, stk.size * scaleRatio);
+                        ctx.restore();
+
+                        // Render Complete Final View
+                        this.renderFinalHub(finalCanvas.toDataURL('image/png'));
+                    };
+                    img.src = url;
+                });
+
+                if (this.placedStickers.length === 0) {
+                    this.renderFinalHub(finalCanvas.toDataURL('image/png'));
+                }
+            }
+
+            // --- FINAL HUB & DIGITAL DELIVERY ---
+            renderFinalHub(finalStripDataUrl) {
+                this.hideAllViews();
+                document.getElementById('viewFinal').classList.remove('hidden');
+                this.currentStep = 'final';
+
+                document.getElementById('finalStripImage').src = finalStripDataUrl;
+                document.getElementById('printAreaImg').src = finalStripDataUrl;
+
+                // Generate Session QR Code
+                this.generateSessionQRCode();
+
+                // Trigger confetti celebration
+                if (window.confetti) {
+                    confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+                }
+            }
+
+            generateSessionQRCode() {
+                const qrContainer = document.getElementById('qrcode');
+                qrContainer.innerHTML = '';
+
+                // Digital Gallery Local URL
+                const galleryUrl = `${window.location.origin}${window.location.pathname}?session=${this.sessionId}`;
+
+                new QRCode(qrContainer, {
+                    text: galleryUrl,
+                    width: 130,
+                    height: 130,
+                    colorDark: '#09090b',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.H
+                });
+            }
+
+            downloadFile(type) {
+                const link = document.createElement('a');
+                if (type === 'strip') {
+                    link.href = document.getElementById('finalStripImage').src;
+                    link.download = `CTRLP_STRIP_${this.sessionId}.png`;
+                } else if (typeof type === 'number') {
+                    link.href = this.capturedPhotos[type];
+                    link.download = `CTRLP_SHOT_${type + 1}_${this.sessionId}.png`;
+                }
+                link.click();
+            }
+
+            downloadAllZip() {
+                // Download all 3 shots + strip sequentially
+                this.downloadFile('strip');
+                setTimeout(() => this.downloadFile(0), 300);
+                setTimeout(() => this.downloadFile(1), 600);
+                setTimeout(() => this.downloadFile(2), 900);
+            }
+
+            triggerBrowserPrint() {
+                window.print();
+            }
+
+            async printDirectWebBluetooth() {
+                try {
+                    if (!navigator.bluetooth) {
+                        alert("Web Bluetooth is not supported in this browser. Please use Chrome or Bluefy Browser on iOS.");
+                        return;
+                    }
+                    
+                    alert("Scanning for LIOTOG C19 / Thermal ESC/POS Bluetooth Printer...");
+                    const device = await navigator.bluetooth.requestDevice({
+                        acceptAllDevices: true,
+                        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+                    });
+
+                    alert(`Connected to ${device.name || 'Thermal Printer'}. Sending print command...`);
+                } catch (err) {
+                    console.warn("Bluetooth connection canceled or failed:", err);
+                    this.togglePrinterHelpModal(true);
+                }
+            }
+
+            startNewSession() {
+                this.sessionId = this.generateSessionId();
+                document.getElementById('currentSessionIdDisplay').innerText = this.sessionId;
+                this.showWelcome();
+            }
+
+            // --- MODALS & ADMIN ---
+            toggleAdminModal(show) {
+                document.getElementById('adminModal').classList.toggle('hidden', !show);
+            }
+
+            toggleHowModal(show) {
+                document.getElementById('howModal').classList.toggle('hidden', !show);
+            }
+
+            togglePrinterHelpModal(show) {
+                document.getElementById('printerHelpModal').classList.toggle('hidden', !show);
+            }
+
+            showHowItWorksModal() {
+                this.toggleHowModal(true);
+            }
+
+            showPrinterAppInstructions() {
+                this.togglePrinterHelpModal(true);
+            }
+
+            saveAdminSettings() {
+                this.config.countdown = document.getElementById('cfgCountdown').value;
+                this.config.paperFormat = document.getElementById('cfgPaperFormat').value;
+                this.config.ditherMode = document.getElementById('cfgDitherMode').value;
+                this.config.flashBeep = document.getElementById('cfgFlashBeep').value === 'true';
+                this.config.tagline = document.getElementById('cfgTagline').value;
+
+                this.toggleAdminModal(false);
+                alert("Settings saved successfully!");
+            }
+
+            testPrintPattern() {
+                alert("Generating 57mm Thermal Canvas Diagnostic Pattern...");
+                this.toggleAdminModal(false);
+                this.capturedPhotos = [
+                    'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" bg="black"><rect width="400" height="300" fill="%23000"/><text x="200" y="150" fill="%23fff" font-size="24" text-anchor="middle">TEST SHOT 1</text></svg>',
+                    'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="%23666"/><text x="200" y="150" fill="%23fff" font-size="24" text-anchor="middle">TEST SHOT 2</text></svg>',
+                    'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="%23aaa"/><text x="200" y="150" fill="%23000" font-size="24" text-anchor="middle">TEST SHOT 3</text></svg>'
+                ];
+                this.openStickerEditor();
+            }
+
+            clearSessionHistory() {
+                if (confirm("Purge all local session cache and reset IDs?")) {
+                    localStorage.clear();
+                    alert("Cache cleared.");
+                }
+            }
+        }
+
+        // Initialize App Instance
+        let app;
+        window.onload = () => {
+            app = new CtrlPPhotobooth();
+        };
+    </script>
+</body>
+</html>
